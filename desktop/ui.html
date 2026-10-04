@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>AI 遥测</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./ui.js" defer></script>
+  <script src="./health-ui.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="titlebar">
+      <h1>AI <span>遥测</span></h1>
+      <div class="window-actions">
+        <button id="pin-toggle" type="button" title="置顶" aria-label="置顶" aria-pressed="false">◇</button>
+        <button id="minimize-button" type="button" title="最小化" aria-label="最小化">−</button>
+        <button id="close-button" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+    </header>
+    <div class="toolbar">
+      <span id="connection-state">等待本地数据</span>
+      <div>
+        <button id="refresh-button" type="button" title="刷新" aria-label="刷新">↻</button>
+        <button id="theme-toggle" type="button" title="切换主题" aria-label="切换深浅主题" aria-pressed="false">◐</button>
+        <button id="settings-toggle" type="button" aria-controls="settings-panel" aria-expanded="false">设置</button>
+      </div>
+    </div>
+    <nav id="source-tabs" role="tablist" aria-label="数据来源">
+      <button id="tab-codex" type="button" role="tab" data-source="codex" aria-controls="source-panel" aria-selected="true">Codex</button>
+      <button id="tab-claude" type="button" role="tab" data-source="claude" aria-controls="source-panel" aria-selected="false" tabindex="-1">Claude Code</button>
+      <button id="tab-zcodex" type="button" role="tab" data-source="zcodex" aria-controls="source-panel" aria-selected="false" tabindex="-1">zCodex</button>
+      <button id="tab-dsh-deepseek" type="button" role="tab" data-source="dsh-deepseek" aria-controls="source-panel" aria-selected="false" tabindex="-1">DSH DeepSeek</button>
+      <button id="tab-qwen-codex" type="button" role="tab" data-source="qwen-codex" aria-controls="source-panel" aria-selected="false" tabindex="-1">Qwen Codex</button>
+      <button id="tab-kimi-codex" type="button" role="tab" data-source="kimi-codex" aria-controls="source-panel" aria-selected="false" tabindex="-1">Kimi Codex</button>
+    </nav>
+    <p id="app-status" role="status" hidden></p>
+    <main id="source-panel" role="tabpanel" aria-labelledby="tab-codex" tabindex="0">
+      <div id="metric-grid"></div>
+      <p id="quota-note" class="note"></p>
+      <section class="detail-section" aria-labelledby="models-heading">
+        <h2 id="models-heading">模型明细</h2>
+        <ul id="model-list"></ul>
+        <p id="source-details" class="note"></p>
+      </section>
+      <section class="detail-section" aria-labelledby="pricing-heading">
+        <h2 id="pricing-heading">计价口径</h2>
+        <p id="pricing-note" class="note"></p>
+      </section>
+      <section class="detail-section" aria-labelledby="privacy-heading">
+        <h2 id="privacy-heading">隐私审计</h2>
+        <p id="privacy-channel" class="note"></p>
+        <ul id="privacy-audit"></ul>
+      </section>
+      <section id="warnings-section" class="detail-section" aria-labelledby="warnings-heading" hidden>
+        <h2 id="warnings-heading">数据提示</h2>
+        <ul id="warnings"></ul>
+      </section>
+    </main>
+    <section id="settings-panel" aria-labelledby="settings-heading" hidden>
+      <section id="health-panel" class="detail-section" aria-label="模型可用性监测"></section>
+      <h2 id="settings-heading">手动价格规则</h2>
+      <p class="note">USD / 百万 token。空单价继承默认或别名价格，0 表示免费；无法匹配的价格不猜测。provider 留空匹配该来源全部供应商。</p>
+      <form id="pricing-form" novalidate>
+        <fieldset id="pricing-fields">
+          <div id="pricing-rules"></div>
+          <button id="add-rule" type="button" class="wide-button">＋ 新增规则</button>
+        </fieldset>
+        <p id="pricing-status" role="status"></p>
+        <div class="settings-actions">
+          <button id="settings-back" type="button">返回来源</button>
+          <button id="save-rule" type="submit" class="primary">保存并返回</button>
+        </div>
+      </form>
+    </section>
+    <footer><span id="fixture-label" hidden>离线夹具 · </span>更新 <time id="updated-at">尚未更新</time></footer>
+  </div>
+</body>
+</html>

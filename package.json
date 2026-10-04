@@ -1,0 +1,41 @@
+{
+  "name": "ai-yaoce",
+  "productName": "AI 遥测",
+  "version": "1.9.0",
+  "description": "Local AI usage, subscription and privacy monitor",
+  "main": "desktop/main.cjs",
+  "author": "AI 遥测 contributors",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "start": "node scripts/launch-desktop.cjs",
+    "test": "node --test node/tests/*.test.mjs",
+    "smoke": "node scripts/launch-desktop.cjs --smoke --smoke-dir build/desktop-smoke",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "local.aiyaoce.monitor",
+    "productName": "AI 遥测",
+    "icon": "assets/ai-yaoce-logo.png",
+    "directories": { "output": "release" },
+    "files": ["desktop/**", "node/*.mjs", "assets/**", "LICENSE", "package.json"],
+    "asar": true,
+    "asarUnpack": ["node/**", "desktop/backend-worker.mjs"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "artifactName": "ai-yaoce-${version}-windows-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "AI 遥测",
+      "runAfterFinish": false
+    }
+  }
+}

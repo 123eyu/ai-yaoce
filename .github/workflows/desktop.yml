@@ -1,0 +1,66 @@
+name: Desktop Windows x64
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - name: Build Windows installer
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Smoke test packaged Windows executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path $pwd 'release/win-unpacked/AI 遥测.exe'
+          $output = Join-Path $pwd 'build/windows-smoke'
+          $proc = Start-Process -FilePath $exe -ArgumentList @('--smoke', '--smoke-dir', "`"$output`"") -PassThru
+          if (-not $proc.WaitForExit(180000)) { $proc.Kill(); throw 'Desktop smoke timed out' }
+          if ($proc.ExitCode -ne 0) { Get-Content "$output/failure.txt" -ErrorAction SilentlyContinue; throw 'Desktop smoke failed' }
+          $report = Get-Content "$output/report.json" -Raw | ConvertFrom-Json
+          if ($report.platform -ne 'win32' -or $report.arch -ne 'x64' -or !$report.packaged -or !$report.passed) { throw 'Invalid smoke report' }
+          Get-Content "$output/report.json"
+      - name: Install and launch from installed location
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem release/*-setup.exe).FullName
+          $destination = Join-Path $env:LOCALAPPDATA 'ai-yaoce验收'
+          $proc = Start-Process $installer -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw 'Installation failed' }
+          $exe = Join-Path $destination 'AI 遥测.exe'
+          if (!(Test-Path $exe)) { throw 'Installed executable missing' }
+          $output = Join-Path $pwd 'build/windows-installed-smoke'
+          $proc = Start-Process $exe -ArgumentList @('--smoke', '--smoke-visible', '--smoke-dir', "`"$output`"") -PassThru
+          if (-not $proc.WaitForExit(180000)) { $proc.Kill(); throw 'Installed smoke timed out' }
+          if ($proc.ExitCode -ne 0) { Get-Content "$output/failure.txt" -ErrorAction SilentlyContinue; throw 'Installed smoke failed' }
+          $report = Get-Content "$output/report.json" -Raw | ConvertFrom-Json
+          if (!$report.passed -or !$report.visibleStartup) { throw 'Installed visible smoke report failed' }
+          Get-Content "$output/report.json"
+      - name: Hash installer
+        shell: pwsh
+        run: |
+          Get-ChildItem release/*-setup.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Set-Content -Encoding utf8NoBOM release/SHA256SUMS-windows.txt
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-x64
+          path: |
+            release/*-setup.exe
+            release/SHA256SUMS-windows.txt
+            build/windows-smoke/**
+            build/windows-installed-smoke/**
+          if-no-files-found: error
+          retention-days: 14
