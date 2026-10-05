@@ -1,5 +1,10 @@
 # 轻量版发现
 
+## 2026-10-05 原界面优化
+- 用户否决原生UI，恢复1.9竖版为唯一视觉基准。
+- 根因定位：client-telemetry readCandidate对complete文件每次重建parser并从offset=0重读，导致无变化文件仍全量解析，并暂时持有新旧两套记录。
+- 后台backgroundThrottling=false；健康面板每2秒轮询，且没有检查document.hidden。需要保持显示效果不变的节流与验证。
+
 - 旧安装包112174691字节；解压386018625字节；业务asar约1MiB。
 - macOS主机无法运行Windows GUI，使用Windows CI安装、截图与资源采样；不称物理真机验收。
 - WinForms调用系统桌面控件；选择Framework4.8，安装器检查Release>=528040，不自动下载运行时。

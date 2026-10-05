@@ -90,6 +90,21 @@ test('incremental append, incomplete final line, same-size rewrite, truncation a
   await rm(path); await reader.scan(); assert.equal(reader.records().length, 0);
 });
 
+test('unchanged completed files retain parser and read no body; append reads only new bytes', async context => {
+  const { directory, reader } = await fixture(context);
+  const path = join(directory, 'idle.jsonl');
+  await writeFile(path, lines([...metadata, count(100)]));
+  await reader.scan();
+  const parser = [...reader.files.values()][0].parser;
+  await reader.scan();
+  assert.equal(reader.lastScan.bytes, 0);
+  assert.equal([...reader.files.values()][0].parser, parser);
+  const appended = lines([count(150)]);
+  await appendFile(path, appended); await reader.scan();
+  assert.equal(reader.lastScan.bytes, Buffer.byteLength(appended));
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 150);
+});
+
 test('large file resumes beyond 8MiB and huge lines do not consume unbounded memory', async context => {
   const { directory, reader } = await fixture(context);
   const path = join(directory, 'large.jsonl');
@@ -97,6 +112,15 @@ test('large file resumes beyond 8MiB and huge lines do not consume unbounded mem
   await reader.scan(); assert.ok(reader.lastScan.bytes <= SCAN_LIMITS.fileBytes); assert.equal(reader.records().length, 0);
   await reader.scan(); assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 77);
   assert.ok([...reader.files.values()].every(state => state.pending.length <= SCAN_LIMITS.lineBytes));
+});
+
+test('growing rewrite is not mistaken for an append', async context => {
+  const { directory, reader } = await fixture(context);
+  const path = join(directory, 'rewrite.jsonl');
+  await writeFile(path, lines([...metadata, count(100)])); await reader.scan();
+  await writeFile(path, lines([...metadata, count(300), count(400)])); await reader.scan();
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 400);
+  assert.equal(reader.records().length, 2);
 });
 
 test('batch budget is 64MiB and files beyond the first batch are eventually read', async context => {

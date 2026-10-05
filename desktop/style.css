@@ -9,6 +9,7 @@
   --accent: #526c92;
   --selected: rgb(105 131 164 / 16%);
   --warning: #946137;
+  --menu-bg: #f8fafd;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -21,6 +22,7 @@
   --accent: #a1b5d3;
   --selected: rgb(153 180 215 / 15%);
   --warning: #d5b38d;
+  --menu-bg: #272b36;
 }
 * { box-sizing: border-box; }
 .health-fields { display: grid; gap: 7px; min-width: 0; }
@@ -34,6 +36,9 @@
 body { margin: 0; background: var(--bg); color: var(--ink); font: 12px/1.5 "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif; }
 .shell { width: 332px; min-height: 100vh; margin: 0 auto; padding: 12px; background: var(--surface); backdrop-filter: blur(24px); }
 button, input, select { font: inherit; color: inherit; }
+select:not([multiple]), .health-fields select { background: var(--menu-bg); color: var(--ink); }
+select option, select optgroup { background: var(--menu-bg); color: var(--ink); }
+select option:disabled { color: var(--muted); }
 button { border: 1px solid transparent; border-radius: 7px; background: transparent; cursor: pointer; min-height: 28px; padding: 3px 7px; }
 button:hover { background: var(--selected); }
 button:disabled { opacity: .45; cursor: wait; }

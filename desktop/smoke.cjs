@@ -112,6 +112,18 @@ async function runDesktopSmoke(window, output) {
   await pause(150);
   await capture('theme-alternate.png');
   checks.push('Alternate theme rendered');
+  await evaluate(`(() => {
+    document.documentElement.dataset.theme = 'dark';
+    const select = document.createElement('select');
+    const option = document.createElement('option');
+    option.textContent = '深色菜单可读性'; select.append(option); document.body.append(select);
+    const foreground = getComputedStyle(option).color;
+    const background = getComputedStyle(option).backgroundColor;
+    if (foreground !== 'rgb(224, 228, 237)' || background !== 'rgb(39, 43, 54)') throw new Error('Dark option palette mismatch');
+    if (getComputedStyle(select).backgroundColor !== background) throw new Error('Closed select palette mismatch');
+    select.remove();
+  })()`);
+  checks.push('Dark dropdown explicit foreground and opaque background');
 
   const empty = structuredClone(summaries);
   empty.sources.codex = { source: 'codex', models: [], warnings: ['未发现可用日志'], providers: [], fileCount: 0 };

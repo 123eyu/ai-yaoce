@@ -95,3 +95,13 @@ test('isolated live home reads only supplied log roots and no Mirasim does not b
   await backend.savePricing(rulesFor('custom', 'claude', 2));
   assert.equal((await backend.snapshot()).sources.claude.estimatedUSD, 0.00002);
 });
+test('overlapping refreshes share one scan without an unbounded queue', async context => {
+  let updates = 0;
+  const backend = createDesktopBackend({ fixture: true, onUpdate: () => { updates++; } });
+  context.after(() => backend.close());
+  const snapshots = await Promise.all(Array.from({ length: 20 }, () => backend.refresh()));
+  assert.equal(updates, 1);
+  assert.ok(snapshots.every(snapshot => snapshot.sources.codex.todayTokens === snapshots[0].sources.codex.todayTokens));
+  snapshots[0].sources.codex.todayTokens = -1;
+  assert.notEqual((await backend.snapshot()).sources.codex.todayTokens, -1);
+});

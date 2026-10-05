@@ -41,6 +41,7 @@ export function createDesktopBackend({ home, configPath, fixture = false, onUpda
   let cached = null;
   let closed = false;
   let timer = null;
+  let refreshPending = null;
   let queue = Promise.resolve();
   let initialized = false;
   let callbackFailed = false;
@@ -98,15 +99,26 @@ export function createDesktopBackend({ home, configPath, fixture = false, onUpda
       catch { currentWarnings.push('本地价格目录不可读，保留上次目录'); }
       try { await reader.scan(); }
       catch { currentWarnings.push('本批日志采集失败，保留可用计量结果'); }
-      if (!timer && !closed) { timer = setInterval(() => { void enqueue(refresh).catch(() => {}); }, 60_000); timer.unref?.(); }
     }
     catalog.pricing = pricing;
     if (closed) throw new Error('后端已关闭');
     return publish();
   };
+  const requestRefresh = () => {
+    if (refreshPending) return refreshPending.then(clone);
+    clearTimeout(timer);
+    refreshPending = enqueue(refresh).finally(() => {
+      refreshPending = null;
+      if (!fixture && !closed) {
+        timer = setTimeout(() => { void requestRefresh().catch(() => {}); }, 60_000);
+        timer.unref?.();
+      }
+    });
+    return refreshPending.then(clone);
+  };
   return {
-    snapshot: () => enqueue(async () => cached ? clone(cached) : refresh()),
-    refresh: () => enqueue(refresh),
+    snapshot: () => cached ? enqueue(() => clone(cached)) : requestRefresh(),
+    refresh: requestRefresh,
     getPricing: () => enqueue(async () => { await initialize(); return clone(pricing); }),
     savePricing: value => {
       let validated;

@@ -106,5 +106,10 @@
   }
   async function refresh() { if (results) showResults(await window.monitor.getHealth()); }
   window.monitor.getHealth().then(render).catch(() => { panel.textContent = '检测配置读取失败；未启用检测'; });
-  setInterval(() => { if (!document.querySelector('#settings-panel').hidden) refresh().catch(() => {}); }, 2000);
+  let polling = false;
+  setInterval(async () => {
+    if (document.hidden || document.querySelector('#settings-panel').hidden || polling) return;
+    polling = true;
+    try { await refresh(); } catch {} finally { polling = false; }
+  }, 2000);
 })();

@@ -15,6 +15,19 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm test
+      - uses: actions/checkout@v4
+        with:
+          ref: b1073ab0e806f0f659f4d82b7288866d276f7fdf
+          path: build/performance-baseline
+      - name: Compare original and optimized Electron on identical synthetic logs
+        shell: pwsh
+        run: |
+          node scripts/prepare-performance-baseline.cjs build/performance-baseline
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline preparation failed' }
+          node build/performance-baseline/scripts/launch-desktop.cjs --smoke --smoke-performance --smoke-dir build/performance-before
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline performance check failed' }
+          node scripts/launch-desktop.cjs --smoke --smoke-performance --smoke-dir build/performance-after
+          if ($LASTEXITCODE -ne 0) { throw 'Optimized performance check failed' }
       - name: Build Windows installer
         run: npm run dist:win
         env:
@@ -46,6 +59,12 @@ jobs:
           $report = Get-Content "$output/report.json" -Raw | ConvertFrom-Json
           if (!$report.passed -or !$report.visibleStartup) { throw 'Installed visible smoke report failed' }
           Get-Content "$output/report.json"
+          $uninstaller = Get-ChildItem $destination -Filter '*Uninstall*.exe' | Select-Object -First 1
+          if (!$uninstaller) { throw 'Uninstaller missing' }
+          $proc = Start-Process $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw 'Uninstallation failed' }
+          foreach ($attempt in 1..30) { if (!(Test-Path $exe)) { break }; Start-Sleep -Seconds 1 }
+          if (Test-Path $exe) { throw 'Test program was not removed' }
       - name: Hash installer
         shell: pwsh
         run: |
@@ -62,5 +81,7 @@ jobs:
             release/SHA256SUMS-windows.txt
             build/windows-smoke/**
             build/windows-installed-smoke/**
+            build/performance-before/performance.json
+            build/performance-after/performance.json
           if-no-files-found: error
           retention-days: 14

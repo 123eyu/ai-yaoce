@@ -9,6 +9,13 @@ const text = (value, fallback = '') => typeof value === 'string' ? value : fallb
 const number = value => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e15)) : 0;
 const total = tokens => tokens.input + tokens.cached + tokens.written + tokens.output;
 const emptyTokens = () => ({ input: 0, cached: 0, written: 0, output: 0 });
+async function sampleBoundary(handle, offset) {
+  const length = Math.min(128, offset);
+  const head = Buffer.alloc(length), tail = Buffer.alloc(length);
+  await handle.read(head, 0, length, 0);
+  await handle.read(tail, 0, length, offset - length);
+  return Buffer.concat([head, tail]);
+}
 export function codexTokens(value) {
   const input = number(value.input_tokens);
   const cached = Math.min(input, number(value.cached_input_tokens));
@@ -134,6 +141,7 @@ export class ClientTelemetryReader {
     this.home = home;
     this.environment = environment;
     this.files = new Map();
+    this.readBuffer = Buffer.alloc(262144);
     this.cursor = 0;
     this.lastScan = { bytes: 0, files: 0 };
   }
@@ -189,20 +197,21 @@ export class ClientTelemetryReader {
   }
   async readCandidate({ path, source, stat }, horizon) {
     let state = this.files.get(path);
-    const reset = !state || stat.ino !== state.ino || stat.size < state.offset || (stat.mtimeMs !== state.modified && stat.size <= state.size);
+    const reset = !state || stat.ino !== state.ino || stat.size < state.offset || ((stat.mtimeMs !== state.modified || stat.ctimeMs !== state.changed) && stat.size <= state.size);
     if (reset) state = { offset: 0, parser: new UsageLogParser(source, path), pending: Buffer.alloc(0), dropping: false, committed: null };
-    else if (state.complete) {
-      state = { offset: 0, parser: new UsageLogParser(source, path), pending: Buffer.alloc(0), dropping: false, committed: state.parser };
-    }
-    state.ino = stat.ino; state.modified = stat.mtimeMs; state.size = stat.size;
+    state.ino = stat.ino; state.modified = stat.mtimeMs; state.changed = stat.ctimeMs; state.size = stat.size;
     this.files.set(path, state);
     let handle;
     try {
-      handle = await open(path, 'r');
+      if (state.offset < stat.size) handle = await open(path, 'r');
+      if (handle && state.signature && !(await sampleBoundary(handle, state.offset)).equals(state.signature)) {
+        state.offset = 0; state.parser = new UsageLogParser(source, path);
+        state.pending = Buffer.alloc(0); state.dropping = false; state.committed = null;
+      }
       let budget = Math.min(SCAN_LIMITS.fileBytes, SCAN_LIMITS.bytes - this.lastScan.bytes);
       while (budget > 0 && state.offset < stat.size) {
-        const buffer = Buffer.alloc(Math.min(262144, budget, stat.size - state.offset));
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, state.offset);
+        const buffer = this.readBuffer;
+        const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, budget, stat.size - state.offset), state.offset);
         if (!bytesRead) break;
         budget -= bytesRead; this.lastScan.bytes += bytesRead; state.offset += bytesRead;
         let chunk = buffer.subarray(0, bytesRead);
@@ -211,7 +220,7 @@ export class ClientTelemetryReader {
           if (newline < 0) continue;
           state.dropping = false; chunk = chunk.subarray(newline + 1);
         }
-        state.pending = Buffer.concat([state.pending, chunk]);
+        state.pending = state.pending.length ? Buffer.concat([state.pending, chunk]) : chunk;
         let start = 0, newline;
         while ((newline = state.pending.indexOf(10, start)) >= 0) {
           if (newline - start <= SCAN_LIMITS.lineBytes) state.parser.consume(state.pending.subarray(start, newline).toString('utf8'));
@@ -222,6 +231,7 @@ export class ClientTelemetryReader {
         if (state.pending.length > SCAN_LIMITS.lineBytes) { state.pending = Buffer.alloc(0); state.dropping = true; this.issues[source].add('已跳过超大日志行'); }
       }
       state.complete = state.offset >= stat.size;
+      if (handle) state.signature = await sampleBoundary(handle, state.offset);
       if (state.complete) state.committed = null;
       else this.issues[source].add('日志尚未读完，下批从游标继续');
       state.parser.prune(horizon); state.committed?.prune(horizon);
@@ -235,7 +245,7 @@ export class ClientTelemetryReader {
     for (const state of this.files.values()) {
       const parser = state.committed ?? state.parser;
       parser.prune(horizon);
-      result.push(...parser.records.values());
+      for (const record of parser.records.values()) result.push(record);
     }
     return result;
   }

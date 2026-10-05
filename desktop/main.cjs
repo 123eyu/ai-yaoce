@@ -6,11 +6,13 @@ const { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, renameS
 const { tmpdir } = require('node:os');
 
 const smoke = process.argv.includes('--smoke');
+const performanceCheck = smoke && process.argv.includes('--smoke-performance');
 const smokeVisible = smoke && process.argv.includes('--smoke-visible');
 const smokeArgument = process.argv.indexOf('--smoke-dir');
 const smokeDirectory = resolve(smokeArgument >= 0 ? process.argv[smokeArgument + 1] : 'build/desktop-smoke');
 const fixtureDirectory = smoke ? mkdtempSync(join(tmpdir(), 'ai-yaoce-smoke-')) : null;
-if (smoke && !smokeVisible) app.commandLine.appendSwitch('disable-gpu');
+if (smoke && !smokeVisible && !performanceCheck) app.commandLine.appendSwitch('disable-gpu');
+if (performanceCheck) require('./performance.cjs').prepare(join(fixtureDirectory, 'home'));
 app.setName('AI 遥测');
 app.setPath('userData', smoke ? join(fixtureDirectory, 'profile') : join(app.getPath('appData'), 'ai-yaoce'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
@@ -23,6 +25,7 @@ let healthStorageError;
 let sequence = 0;
 let backendFailure;
 let quitting = false;
+let latestSnapshot;
 const pending = new Map();
 const userData = app.getPath('userData');
 const preferences = { alwaysOnTop: false };
@@ -49,14 +52,15 @@ async function startBackend() {
     workerData: {
       ...(smoke ? { home: join(fixtureDirectory, 'home') } : {}),
       configPath: join(smoke ? fixtureDirectory : userData, 'pricing-rules.json'),
-      fixture: smoke
+      fixture: smoke && !performanceCheck
     }
   });
   backend.on('error', failBackend);
   backend.on('exit', (code) => { if (!quitting) failBackend(new Error(`采集进程已停止 (${code})，请重新打开应用`)); });
   backend.on('message', (message) => {
     if (message.type === 'update') {
-      if (window && !window.isDestroyed()) window.webContents.send('monitor:update', message.snapshot);
+      latestSnapshot = message.snapshot;
+      if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) window.webContents.send('monitor:update', message.snapshot);
       return;
     }
     const task = pending.get(message.id);
@@ -138,8 +142,11 @@ async function startWindow() {
     title: 'AI 遥测', show: !smoke || smokeVisible, frame: false, autoHideMenuBar: true,
     backgroundColor: '#22252b', alwaysOnTop: preferences.alwaysOnTop,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true,
-      nodeIntegration: false, webviewTag: false, backgroundThrottling: false }
+      nodeIntegration: false, webviewTag: false, backgroundThrottling: true }
   });
+  const publishLatest = () => { if (latestSnapshot) window.webContents.send('monitor:update', latestSnapshot); };
+  window.on('show', publishLatest);
+  window.on('restore', publishLatest);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => { if (url !== 'app://monitor/ui.html') event.preventDefault(); });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -150,6 +157,7 @@ async function startWindow() {
 }
 
 async function runSmoke() {
+  if (performanceCheck) return require('./performance.cjs').measure(app, window, request, smokeDirectory);
   mkdirSync(smokeDirectory, { recursive: true });
   const { runDesktopSmoke } = require('./smoke.cjs');
   const report = await runDesktopSmoke(window, smokeDirectory);
