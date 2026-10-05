@@ -24,9 +24,9 @@ jobs:
         run: |
           node scripts/prepare-performance-baseline.cjs build/performance-baseline
           if ($LASTEXITCODE -ne 0) { throw 'Baseline preparation failed' }
-          node build/performance-baseline/scripts/launch-desktop.cjs --smoke --smoke-performance --smoke-dir build/performance-before
+          node build/performance-baseline/scripts/launch-desktop.cjs --smoke --smoke-visible --smoke-performance --smoke-dir build/performance-before
           if ($LASTEXITCODE -ne 0) { throw 'Baseline performance check failed' }
-          node scripts/launch-desktop.cjs --smoke --smoke-performance --smoke-dir build/performance-after
+          node scripts/launch-desktop.cjs --smoke --smoke-visible --smoke-performance --smoke-dir build/performance-after
           if ($LASTEXITCODE -ne 0) { throw 'Optimized performance check failed' }
       - name: Build Windows installer
         run: npm run dist:win

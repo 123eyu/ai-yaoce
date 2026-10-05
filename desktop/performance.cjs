@@ -28,19 +28,25 @@ async function measure(app, window, request, output) {
   }
   window.hide();
   await pause(2000);
+  const priorUpdate = (await request('snapshot')).updatedAt;
+  const rendererVisibility = await window.webContents.executeJavaScript('document.visibilityState');
   app.getAppMetrics();
   const samples = [];
   for (let count = 0; count < 66; count++) {
     await pause(1000);
     const processes = app.getAppMetrics();
     samples.push({ workingSetKiB: processes.reduce((sum, process) => sum + process.memory.workingSetSize, 0),
+      privateKiB: processes.every(process => Number.isFinite(process.memory.privateBytes)) ? processes.reduce((sum, process) => sum + process.memory.privateBytes, 0) : null,
       cpuPercent: processes.reduce((sum, process) => sum + process.cpu.percentCPUUsage, 0) / cpus().length,
       processes: processes.map(process => ({ type: process.type, pid: process.pid, workingSetKiB: process.memory.workingSetSize })) });
   }
-  const report = { passed: (await request('snapshot')).sources.codex.todayTokens === 12000,
-    platform: process.platform, processors: cpus().length, refreshMilliseconds,
+  const finalSnapshot = await request('snapshot');
+  const scheduledRefreshObserved = finalSnapshot.updatedAt !== priorUpdate;
+  const report = { passed: finalSnapshot.sources.codex.todayTokens === 12000 && scheduledRefreshObserved,
+    platform: process.platform, processors: cpus().length, refreshMilliseconds, rendererVisibility, scheduledRefreshObserved,
     averageIdleCpuPercent: samples.reduce((sum, sample) => sum + sample.cpuPercent, 0) / samples.length,
     peakTotalWorkingSetMiB: Math.max(...samples.map(sample => sample.workingSetKiB)) / 1024,
+    peakTotalPrivateMiB: samples.every(sample => sample.privateKiB !== null) ? Math.max(...samples.map(sample => sample.privateKiB)) / 1024 : null,
     scope: 'Isolated 12000-event synthetic logs; all Electron app processes, summed working sets may double-count shared pages; hidden window, 66s includes scheduled refresh; CPU normalized by logical cores', samples };
   writeFileSync(join(output, 'performance.json'), JSON.stringify(report, null, 2));
   if (!report.passed) throw new Error('Performance final count mismatch');
