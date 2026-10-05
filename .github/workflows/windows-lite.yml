@@ -1,0 +1,41 @@
+name: Windows lightweight native
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Install packaging tool
+        shell: pwsh
+        run: choco install nsis --yes --no-progress
+      - name: Verify no active network clients in native application
+        shell: pwsh
+        run: |
+          $matches = Select-String -Path windows/Core.cs,windows/MainForm.cs,windows/Program.cs -Pattern 'HttpClient|WebRequest|System.Net|Process.Start|DllImport|Socket|WebBrowser'
+          if ($matches) { throw 'Unexpected active network/process integration' }
+      - name: Build, core tests and installer size gate
+        shell: pwsh
+        run: ./windows/build.ps1
+      - name: Native UI, installation, resource sampling and uninstall
+        shell: pwsh
+        run: ./windows/verify.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-lite-x64
+          path: |
+            release/windows-lite/*setup.exe
+            release/windows-lite/SHA256SUMS.txt
+            release/windows-lite/size-report.json
+            build/windows-lite/verification/*/report.json
+            build/windows-lite/verification/*/failure.txt
+            build/windows-lite/verification/*/native-window.png
+            build/windows-lite/verification/*/performance.json
+            build/windows-lite/verification/installation.json
+          if-no-files-found: error
+          retention-days: 14
