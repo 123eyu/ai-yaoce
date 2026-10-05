@@ -3,9 +3,9 @@ Set-Location (Join-Path $PSScriptRoot '..')
 $root = Join-Path $pwd 'build/windows-lite/verification'
 New-Item -ItemType Directory -Force $root | Out-Null
 function Write-Utf8($path, $value) { [IO.File]::WriteAllText($path, $value, (New-Object Text.UTF8Encoding $false)) }
-function Invoke-App($exe, $mode, $home, $output) {
+function Invoke-App($exe, $mode, $testHome, $output) {
   New-Item -ItemType Directory -Force $output | Out-Null
-  $process = Start-Process -FilePath $exe -ArgumentList @($mode, "`"$home`"", "`"$output`"") -PassThru
+  $process = Start-Process -FilePath $exe -ArgumentList @($mode, "`"$testHome`"", "`"$output`"") -PassThru
   if (!$process.WaitForExit(180000)) { $process.Kill(); throw 'Native app timed out' }
   if ($process.ExitCode -ne 0) { Get-Content "$output/failure.txt" -ErrorAction SilentlyContinue; throw "Native verification failed: $mode" }
 }
