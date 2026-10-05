@@ -66,6 +66,10 @@ internal static class Tests
             Check(result.First(item => item.Source == "codex").TodayTokens == 0, "删除文件删除统计");
             Check(LocalAudit.Origin("https://user:SECRET@relay.example/private/SECRET?token=SECRET") == "https://relay.example", "端点脱敏移除凭据路径查询");
             Check(!Data.SafePath(@"\\network.invalid\share\session.jsonl"), "拒绝UNC路径，避免文件读取触发网络请求");
+            failed = false; try { Settings.Load(@"\\network.invalid\share\settings.json"); } catch (InvalidDataException) { failed = true; }
+            Check(failed, "读取设置前拒绝网络路径");
+            failed = false; try { Data.Save(@"\\network.invalid\share\settings.json", options); } catch (IOException) { failed = true; }
+            Check(failed, "写入设置前拒绝网络路径");
             string qwen = Path.Combine(home, ".qwen"); Directory.CreateDirectory(qwen);
             File.WriteAllText(Path.Combine(qwen, "settings.json"), "{\"logPrompts\":true,\"usageStatisticsEnabled\":false,\"base_url\":\"https://a:SECRET@relay.example/path/SECRET?token=SECRET\"}");
             var snapshot = new Snapshot(); LocalAudit.Read(home, Source.All.First(source => source.Id == "qwen-codex"), snapshot);

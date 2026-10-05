@@ -84,6 +84,7 @@ namespace AiYaoce
         }
         public static void Save(string path, object value)
         {
+            if (!SafePath(path)) throw new IOException("只允许写入本机普通目录");
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
@@ -103,6 +104,7 @@ namespace AiYaoce
         public bool Paused, Pinned;
         public static Settings Load(string path)
         {
+            if (!Data.SafePath(path)) throw new InvalidDataException("设置路径不是本机普通目录");
             if (!File.Exists(path)) return new Settings();
             string content = Data.SmallFile(path);
             if (content == null) throw new InvalidDataException("设置不可读，原文件保留");
@@ -351,6 +353,7 @@ namespace AiYaoce
         public List<Dictionary<string, object>> Rules = new List<Dictionary<string, object>>();
         public static Pricing Load(string path)
         {
+            if (!Data.SafePath(path)) throw new InvalidDataException("价格路径不是本机普通目录");
             var result = new Pricing(); if (!File.Exists(path)) return result;
             var root = Data.Json().DeserializeObject(Data.SmallFile(path) ?? "null");
             var rules = Data.Get(root, "rules") as IEnumerable;
