@@ -53,7 +53,7 @@ Section "AI 遥测"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "DisplayVersion" "2.0.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "DisplayIcon" "$INSTDIR\ai-yaoce.exe"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "UninstallString" '$"$INSTDIR\uninstall.exe$"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native" "NoRepair" 1
 SectionEnd

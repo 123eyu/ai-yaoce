@@ -45,9 +45,9 @@ namespace AiYaoce
                     }
                     return Environment.ExitCode;
                 }
-                catch
+                catch (Exception error)
                 {
-                    if (testing) { Directory.CreateDirectory(output); File.WriteAllText(Path.Combine(output, "failure.txt"), "启动失败：设置、资源或UI初始化无效"); }
+                    if (testing) { Directory.CreateDirectory(output); File.WriteAllText(Path.Combine(output, "failure.txt"), error.ToString()); }
                     else MessageBox.Show("无法启动：设置文件可能损坏或不可读。请备份 %APPDATA%\\ai-yaoce\\native-settings.json 后检查；程序没有覆盖该文件。", "AI 遥测", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;
                 }
@@ -79,7 +79,8 @@ namespace AiYaoce
                 await form.RefreshAsync(); check(form.LastBytes == 0, "日志不变时不重新读取正文");
                 form.Hide(); check(!form.Visible && form.TrayVisible, "隐藏窗口后保留托盘"); form.ShowWindow();
                 form.SelectSource("codex"); await Task.Delay(200);
-                using (var image = new Bitmap(form.ClientSize.Width, form.ClientSize.Height)) { form.DrawToBitmap(image, form.ClientRectangle); image.Save(Path.Combine(output, "native-window.png")); }
+                using (var image = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(image, new Rectangle(0, 0, form.Width, form.Height)); image.Save(Path.Combine(output, "native-window.png")); }
+                File.WriteAllLines(Path.Combine(output, "layout.txt"), Layout(form));
                 var saved = Settings.Load(Path.Combine(home, "app-settings", "native-settings.json"));
                 check(saved.Selected == "codex" && saved.Enabled.Contains("claude") && !saved.Paused, "本地设置持久化");
                 var process = Process.GetCurrentProcess(); process.Refresh();
@@ -118,6 +119,11 @@ namespace AiYaoce
             }
             catch (Exception error) { Environment.ExitCode = 1; File.WriteAllText(Path.Combine(output, "failure.txt"), error.Message); }
             finally { form.ExitApp(); }
+        }
+        private static System.Collections.Generic.IEnumerable<string> Layout(Control control)
+        {
+            yield return control.GetType().Name + " " + control.Name + " text=" + control.Text + " bounds=" + control.Bounds + " client=" + control.ClientSize;
+            foreach (Control child in control.Controls) foreach (string line in Layout(child)) yield return "  " + line;
         }
     }
 }

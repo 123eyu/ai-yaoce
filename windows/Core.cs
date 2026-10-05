@@ -57,6 +57,8 @@ namespace AiYaoce
         {
             try
             {
+                string full = Path.GetFullPath(path);
+                if (full.StartsWith(@"\\", StringComparison.Ordinal) || new DriveInfo(Path.GetPathRoot(full)).DriveType == DriveType.Network) return false;
                 var current = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(path)));
                 while (current != null)
                 {
@@ -371,6 +373,7 @@ namespace AiYaoce
         private readonly bool allowEnvironment;
         private readonly Dictionary<string, FileState> states = new Dictionary<string, FileState>(StringComparer.OrdinalIgnoreCase);
         private int cursor;
+        private bool recordsTrimmed;
         public long LastBytes;
         public Monitor(string home, string pricingPath, bool allowEnvironment = true) { this.home = home; this.pricingPath = pricingPath; this.allowEnvironment = allowEnvironment; }
         private IEnumerable<string> Roots(Source source)
@@ -388,7 +391,7 @@ namespace AiYaoce
             DateTime now = DateTime.UtcNow;
             var snapshots = Source.All.Select(source => new Snapshot { Source = source.Id, Enabled = settings.Enabled.Contains(source.Id), ScannedAt = now }).ToList();
             var candidates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            int visited = 0; bool bounded = false; LastBytes = 0;
+            int visited = 0; bool bounded = recordsTrimmed; LastBytes = 0;
             foreach (var source in Source.All.Where(source => settings.Enabled.Contains(source.Id) && source.Usage))
             {
                 var stack = new Stack<string>(Roots(source).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -429,7 +432,7 @@ namespace AiYaoce
                 if (recordCount > 20000)
                 {
                     foreach (string key in state.Parser.Records.OrderBy(pair => pair.Value.At).Take(recordCount - 20000).Select(pair => pair.Key).ToArray()) { state.Parser.Records.Remove(key); recordCount--; }
-                    bounded = true;
+                    bounded = true; recordsTrimmed = true;
                 }
             }
             Pricing pricing;
