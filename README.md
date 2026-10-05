@@ -12,7 +12,7 @@
 - 新版不包含旧版的主动模型健康探测功能。
 - 发布包、性能与安装验收报告见仓库 Releases；CI 测试不等于物理设备与真实官订账号完整验收。
 
-Windows x64 默认安装到 `%LOCALAPPDATA%\Programs\ai-yaoce`，设置在 `%APPDATA%\ai-yaoce`。旧 Electron 版不会被偷偷删除；建议先退出并卸载旧版，再安装轻量版，以免旧运行时继续占用磁盘。
+Windows x64 默认安装到 `%LOCALAPPDATA%\Programs\ai-yaoce`，设置在 `%APPDATA%\ai-yaoce`。升级请先退出并卸载旧版（保留设置），再安装新版。安装目录存在同名程序、LICENSE 或卸载器时拒绝覆盖；旧 Electron 版不会被偷偷删除。
 
 ## 监控来源
 
