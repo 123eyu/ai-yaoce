@@ -119,6 +119,11 @@ test('large file resumes beyond 8MiB and huge lines do not consume unbounded mem
   assert.ok(reader.summaries(new LocalPriceCatalog()).codex.warnings.some(warning => warning.includes('校验尚未完成')));
   await reader.scan();
   assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 88);
+  for (let input = 89; input <= 92; input++) {
+    await appendFile(path, lines([count(input)])); await reader.scan();
+    assert.ok(reader.lastScan.bytes + reader.lastScan.validationBytes <= SCAN_LIMITS.fileBytes);
+  }
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 92);
 });
 
 test('growing rewrite is not mistaken for an append', async context => {

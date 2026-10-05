@@ -199,9 +199,12 @@ export class ClientTelemetryReader {
       if (state.offset < stat.size) handle = await open(path, 'r');
       let budget = Math.min(SCAN_LIMITS.fileBytes, SCAN_LIMITS.bytes - this.lastScan.bytes - this.lastScan.validationBytes);
       if (handle && state.offset > 0 && (state.validation || stat.size !== state.size || stat.mtimeMs !== state.modified || stat.ctimeMs !== state.changed)) {
-        const stamp = `${stat.ino}/${stat.size}/${stat.mtimeMs}/${stat.ctimeMs}`;
-        if (state.validation?.stamp !== stamp) state.validation = { stamp, offset: 0, hash: createHash('sha256') };
+        const previous = state.validation;
+        if (!previous || stat.size < previous.size || (stat.size === previous.size && (stat.mtimeMs !== previous.modified || stat.ctimeMs !== previous.changed))) {
+          state.validation = { offset: 0, hash: createHash('sha256') };
+        }
         const validation = state.validation;
+        validation.size = stat.size; validation.modified = stat.mtimeMs; validation.changed = stat.ctimeMs;
         while (budget > 0 && validation.offset < state.offset) {
           const { bytesRead } = await handle.read(this.readBuffer, 0, Math.min(this.readBuffer.length, budget, state.offset - validation.offset), validation.offset);
           if (!bytesRead) break;
