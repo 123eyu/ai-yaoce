@@ -59,13 +59,15 @@ namespace AiYaoce
             {
                 string full = Path.GetFullPath(path);
                 if (full.StartsWith(@"\\", StringComparison.Ordinal) || new DriveInfo(Path.GetPathRoot(full)).DriveType == DriveType.Network) return false;
-                var current = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(path)));
-                while (current != null)
+                string root = Path.GetPathRoot(full), current = root;
+                foreach (string part in full.Substring(root.Length).Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    if (current.Exists && (current.Attributes & FileAttributes.ReparsePoint) != 0) return false;
-                    current = current.Parent;
+                    current = Path.Combine(current, part);
+                    try { if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return false; }
+                    catch (FileNotFoundException) { return true; }
+                    catch (DirectoryNotFoundException) { return true; }
                 }
-                return !File.Exists(path) && !Directory.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
+                return true;
             }
             catch { return false; }
         }
@@ -410,7 +412,7 @@ namespace AiYaoce
                 while (stack.Count > 0 && visited < 5000 && candidates.Count < 256)
                 {
                     cancellation.ThrowIfCancellationRequested(); string directory = stack.Pop();
-                    if (!Directory.Exists(directory) || !Data.SafePath(directory)) continue;
+                    if (!Data.SafePath(directory) || !Directory.Exists(directory)) continue;
                     try
                     {
                         foreach (string path in Directory.EnumerateFileSystemEntries(directory))

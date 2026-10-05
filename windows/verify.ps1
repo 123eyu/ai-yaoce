@@ -43,6 +43,7 @@ if ($process.ExitCode -ne 0) { throw 'Installation failed' }
 $installed = Join-Path $destination 'ai-yaoce.exe'
 if (!(Test-Path $installed)) { throw 'Default ai-yaoce install path missing' }
 $uninstallEntry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-yaoce-native'
+if ($uninstallEntry.DisplayName -ne 'AI 遥测') { throw 'Installed display name is not valid Chinese Unicode' }
 if ($uninstallEntry.UninstallString -ne ('"' + (Join-Path $destination 'uninstall.exe') + '"')) { throw 'Invalid registered uninstall command' }
 if (!(Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'AI 遥测.lnk'))) { throw 'Desktop shortcut missing' }
 Invoke-App $installed '--smoke' $homeSmall "$root/installed"

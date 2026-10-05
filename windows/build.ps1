@@ -24,9 +24,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Test build failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }
 $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS/makensis.exe'
 if (!(Test-Path $nsis)) { throw 'Install NSIS first; no implicit runtime download' }
-& $nsis /V3 windows/installer.nsi
+& $nsis /INPUTCHARSET UTF8 /V3 windows/installer.nsi
 if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
 $installer = Get-Item 'release/windows-lite/ai-yaoce-2.0.0-windows-x64-setup.exe'
+if ($installer.VersionInfo.ProductName -ne 'AI 遥测') { throw 'Installer product name is not valid Chinese Unicode' }
 if ($installer.Length -gt 5MB) { throw 'Installer exceeds 5 MiB budget' }
 $bytes = (Get-ChildItem 'release/windows-lite/app' -File -Recurse | Measure-Object Length -Sum).Sum
 if ($bytes -gt 10MB) { throw 'Application exceeds 10 MiB budget' }
