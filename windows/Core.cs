@@ -206,6 +206,7 @@ namespace AiYaoce
         public long Offset, Length;
         public DateTime Stamp;
         private byte[] prefix = new byte[0];
+        private byte[] boundary = new byte[0];
         private readonly MemoryStream pending = new MemoryStream();
         private bool skipping;
         public FileState(string path, string source) { Path = path; Source = source; Parser = new Parser(source, path); }
@@ -218,6 +219,13 @@ namespace AiYaoce
                 var head = new byte[Math.Min(128, stream.Length)];
                 int headRead = stream.Read(head, 0, head.Length);
                 bool changed = prefix.Length > headRead || !prefix.SequenceEqual(head.Take(prefix.Length));
+                if (Offset >= boundary.Length && stream.Length >= Offset && boundary.Length > 0)
+                {
+                    stream.Position = Offset - boundary.Length;
+                    var previousBoundary = new byte[boundary.Length];
+                    int boundaryRead = stream.Read(previousBoundary, 0, previousBoundary.Length);
+                    changed |= boundaryRead != boundary.Length || !boundary.SequenceEqual(previousBoundary);
+                }
                 if (stream.Length < Offset || (stream.Length == Length && metadata.LastWriteTimeUtc != Stamp) || changed)
                 { Offset = 0; pending.SetLength(0); skipping = false; Parser = new Parser(Source, Path); }
                 prefix = head.Take(headRead).ToArray(); Length = stream.Length; Stamp = metadata.LastWriteTimeUtc;
@@ -241,6 +249,10 @@ namespace AiYaoce
                     }
                     consumed += count; Offset += count;
                 }
+                boundary = new byte[Math.Min(128, Offset)];
+                stream.Position = Offset - boundary.Length;
+                int captured = stream.Read(boundary, 0, boundary.Length);
+                if (captured != boundary.Length) boundary = new byte[0];
                 return consumed;
             }
         }

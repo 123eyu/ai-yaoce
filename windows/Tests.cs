@@ -39,13 +39,14 @@ internal static class Tests
             string file = Path.Combine(directory, "session.jsonl"); File.WriteAllText(file, Count(10));
             var state = new FileState(file, "codex"); state.Read(Now, 8192, CancellationToken.None);
             Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 10, "首轮磁盘读取");
-            Check(state.Read(Now, 8192, CancellationToken.None) == 0, "未变日志零正文读取");
+            Check(state.Read(Now, 8192, CancellationToken.None) == 0, "未变日志不重复解析，仅校验小片段");
             File.AppendAllText(file, Count(20)); state.Read(Now, 8192, CancellationToken.None);
             Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 20, "增量追加");
             File.WriteAllText(file, Count(3)); state.Read(Now, 8192, CancellationToken.None);
             Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 3, "截断重建");
-            File.WriteAllText(file, Count(4)); state.Read(Now, 8192, CancellationToken.None);
-            Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 4, "同长度改写重建");
+            DateTime previousStamp = File.GetLastWriteTimeUtc(file);
+            File.WriteAllText(file, Count(4)); File.SetLastWriteTimeUtc(file, previousStamp); state.Read(Now, 8192, CancellationToken.None);
+            Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 4, "同长度同时间戳改写用边界采样重建");
             File.AppendAllText(file, Count(8).TrimEnd('\n')); state.Read(Now, 8192, CancellationToken.None);
             Check(state.Parser.Records.Values.Sum(record => record.Tokens.Total) == 4, "不完整尾行等待追加");
             File.AppendAllText(file, "\n"); state.Read(Now, 8192, CancellationToken.None);

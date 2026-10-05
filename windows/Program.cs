@@ -76,7 +76,7 @@ namespace AiYaoce
                 form.SetSourceEnabled("claude", true); await Task.Delay(100); await Until(() => !form.Busy);
                 form.SetPaused(true); int before = form.RefreshCount; await form.RefreshAsync(); check(before == form.RefreshCount, "暂停阻止扫描");
                 form.SetPaused(false); await Task.Delay(100); await Until(() => !form.Busy);
-                await form.RefreshAsync(); check(form.LastBytes == 0, "日志不变时不重新读取正文");
+                await form.RefreshAsync(); check(form.LastBytes == 0, "日志不变时不重复解析正文，仅校验小片段");
                 form.Hide(); check(!form.Visible && form.TrayVisible, "隐藏窗口后保留托盘"); form.ShowWindow();
                 form.SelectSource("codex"); await Task.Delay(200);
                 check(form.MetricsFit(), "指标数字完整落在可见区域");
@@ -106,7 +106,8 @@ namespace AiYaoce
                 form.Hide(); await Task.Delay(2000); process.Refresh();
                 var idle = Stopwatch.StartNew(); TimeSpan idleCpu = process.TotalProcessorTime;
                 long peakPrivate = process.PrivateMemorySize64, peakWorking = process.WorkingSet64;
-                for (int sample = 0; sample < 30; sample++)
+                int idleRefreshCount = form.RefreshCount;
+                for (int sample = 0; sample < 130; sample++)
                 {
                     await Task.Delay(500); process.Refresh();
                     peakPrivate = Math.Max(peakPrivate, process.PrivateMemorySize64); peakWorking = Math.Max(peakWorking, process.WorkingSet64);
@@ -114,8 +115,9 @@ namespace AiYaoce
                 double idleSeconds = idle.Elapsed.TotalSeconds;
                 double idleCpuSeconds = (process.TotalProcessorTime - idleCpu).TotalSeconds;
                 double idleCpuPercent = idleCpuSeconds / idleSeconds / Environment.ProcessorCount * 100;
-                bool passed = peakPrivate < 100 * 1024 * 1024 && idleCpuPercent < 1;
-                Data.Save(Path.Combine(output, "performance.json"), new { passed, scanSeconds, scanCpuSeconds, scanAverageCpuPercent = scanCpuSeconds / scanSeconds / Environment.ProcessorCount * 100, idleSeconds, idleCpuSeconds, idleCpuPercent, peakIdlePrivateBytes = peakPrivate, peakIdleWorkingSetBytes = peakWorking, peakWorkingSetBytes = process.PeakWorkingSet64, processorCount = Environment.ProcessorCount, tokens, fixture = "12 files, 12000 Codex usage events, metadata-only retained", scope = "Windows CI synthetic load; not a physical PC or real account benchmark" });
+                bool scheduledRefreshObserved = form.RefreshCount > idleRefreshCount;
+                bool passed = peakPrivate < 100 * 1024 * 1024 && idleCpuPercent < 1 && scheduledRefreshObserved;
+                Data.Save(Path.Combine(output, "performance.json"), new { passed, scanSeconds, scanCpuSeconds, scanAverageCpuPercent = scanCpuSeconds / scanSeconds / Environment.ProcessorCount * 100, idleSeconds, idleCpuSeconds, idleCpuPercent, scheduledRefreshObserved, peakIdlePrivateBytes = peakPrivate, peakIdleWorkingSetBytes = peakWorking, peakWorkingSetBytes = process.PeakWorkingSet64, processorCount = Environment.ProcessorCount, tokens, fixture = "12 files, 12000 Codex usage events, metadata-only retained", scope = "Windows CI synthetic load; idle sampling includes a scheduled scan; not physical-device validation" });
                 if (!passed) Environment.ExitCode = 1;
             }
             catch (Exception error) { Environment.ExitCode = 1; File.WriteAllText(Path.Combine(output, "failure.txt"), error.Message); }
