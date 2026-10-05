@@ -1,6 +1,7 @@
 Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "x64.nsh"
 Name "AI 遥测"
 OutFile "..\release\windows-lite\ai-yaoce-2.0.0-windows-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\ai-yaoce"
@@ -23,6 +24,11 @@ VIAddVersionKey "LegalCopyright" "MIT License"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 Function .onInit
+  ${IfNot} ${RunningX64}
+    MessageBox MB_OK|MB_ICONSTOP "此安装包仅适用于 Windows x64。" /SD IDOK
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
   SetRegView 32
   ReadRegDWORD $0 HKLM "SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" "Release"
   ${If} $0 < 528040
@@ -41,6 +47,10 @@ FunctionEnd
 
 Section "AI 遥测"
   SetShellVarContext current
+  IfFileExists "$INSTDIR\AI 遥测.exe" 0 +4
+    MessageBox MB_OK|MB_ICONSTOP "此目录包含旧 Electron 版，请先通过 Windows 应用设置卸载旧版，或选择其他安装目录。" /SD IDOK
+    SetErrorLevel 3
+    Abort
   SetOutPath "$INSTDIR"
   File "..\release\windows-lite\app\ai-yaoce.exe"
   File "..\LICENSE"

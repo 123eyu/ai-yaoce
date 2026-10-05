@@ -79,6 +79,7 @@ namespace AiYaoce
                 await form.RefreshAsync(); check(form.LastBytes == 0, "日志不变时不重新读取正文");
                 form.Hide(); check(!form.Visible && form.TrayVisible, "隐藏窗口后保留托盘"); form.ShowWindow();
                 form.SelectSource("codex"); await Task.Delay(200);
+                check(form.MetricsFit(), "指标数字完整落在可见区域");
                 using (var image = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(image, new Rectangle(0, 0, form.Width, form.Height)); image.Save(Path.Combine(output, "native-window.png")); }
                 File.WriteAllLines(Path.Combine(output, "layout.txt"), Layout(form));
                 var saved = Settings.Load(Path.Combine(home, "app-settings", "native-settings.json"));

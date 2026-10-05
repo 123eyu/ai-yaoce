@@ -27,7 +27,7 @@ namespace AiYaoce
         private readonly Button refresh = new Button(), prices = new Button();
         private readonly CheckBox pause = new CheckBox(), pin = new CheckBox();
         private readonly ComboBox interval = new ComboBox();
-        private bool ready, closing, rerun;
+        private bool ready, closing, rerun, resourcesReleased;
         private int generation;
         private List<Snapshot> snapshots = new List<Snapshot>();
         private Image logo;
@@ -73,6 +73,7 @@ namespace AiYaoce
             content.Controls.Add(details, 1, 0);
             channel.Dock = DockStyle.Fill; channel.Font = new Font(Font, FontStyle.Bold); channel.Text = "等待读取本地数据"; details.Controls.Add(channel, 0, 0);
             var counters = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, BackColor = Color.FromArgb(243, 245, 247), Margin = new Padding(0, 0, 0, 12) };
+            counters.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             string[] names = { "今日 token", "近 7 天 token", "今日计量记录", "今日参考费用" };
             for (int index = 0; index < 4; index++)
             {
@@ -153,6 +154,7 @@ namespace AiYaoce
         public void SelectSource(string id) { sources.SelectedIndex = Array.FindIndex(Source.All, source => source.Id == id); }
         public void SetSourceEnabled(string id, bool enabled) { sources.SetItemChecked(Array.FindIndex(Source.All, source => source.Id == id), enabled); }
         public void SetPaused(bool value) { pause.Checked = value; }
+        public bool MetricsFit() { return metrics.All(metric => metric.Parent.ClientRectangle.Contains(metric.Bounds) && metric.Parent.Parent.ClientRectangle.Contains(metric.Parent.Bounds)); }
         public void ShowWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); }
         private static string Count(double value) { return value >= 1e6 ? (value / 1e6).ToString("0.##") + "M" : value >= 1000 ? (value / 1000).ToString("0.##") + "K" : value.ToString("0"); }
         private void Render()
@@ -178,7 +180,12 @@ namespace AiYaoce
         public void ExitApp() { closing = true; timer.Stop(); stop.Cancel(); tray.Visible = false; Close(); }
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { closing = true; timer.Dispose(); stop.Cancel(); tray.Visible = false; tray.ContextMenuStrip.Dispose(); tray.Dispose(); if (logo != null) logo.Dispose(); }
+            if (disposing && !resourcesReleased)
+            {
+                resourcesReleased = true; closing = true; timer.Dispose(); stop.Cancel();
+                if (tray != null) { tray.Visible = false; if (tray.ContextMenuStrip != null) tray.ContextMenuStrip.Dispose(); tray.Dispose(); }
+                if (logo != null) logo.Dispose();
+            }
             base.Dispose(disposing);
         }
     }
