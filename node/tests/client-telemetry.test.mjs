@@ -112,6 +112,13 @@ test('large file resumes beyond 8MiB and huge lines do not consume unbounded mem
   await reader.scan(); assert.ok(reader.lastScan.bytes <= SCAN_LIMITS.fileBytes); assert.equal(reader.records().length, 0);
   await reader.scan(); assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 77);
   assert.ok([...reader.files.values()].every(state => state.pending.length <= SCAN_LIMITS.lineBytes));
+  await appendFile(path, lines([count(88)]));
+  await reader.scan();
+  assert.ok(reader.lastScan.bytes + reader.lastScan.validationBytes <= SCAN_LIMITS.fileBytes);
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 77);
+  assert.ok(reader.summaries(new LocalPriceCatalog()).codex.warnings.some(warning => warning.includes('校验尚未完成')));
+  await reader.scan();
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 88);
 });
 
 test('growing rewrite is not mistaken for an append', async context => {
@@ -121,6 +128,16 @@ test('growing rewrite is not mistaken for an append', async context => {
   await writeFile(path, lines([...metadata, count(300), count(400)])); await reader.scan();
   assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 400);
   assert.equal(reader.records().length, 2);
+});
+
+test('middle rewrite with identical boundary bytes and growth rebuilds usage', async context => {
+  const { directory, reader } = await fixture(context);
+  const path = join(directory, 'middle.jsonl');
+  const padding = JSON.stringify({ type: 'response_item', text: 'same-boundary'.repeat(100) }) + '\n';
+  await writeFile(path, padding + lines([...metadata, count(100)]) + padding); await reader.scan();
+  await writeFile(path, padding + lines([...metadata, count(300)]) + padding + padding); await reader.scan();
+  assert.equal(reader.summaries(new LocalPriceCatalog()).codex.weekTokens, 300);
+  assert.ok(reader.lastScan.validationBytes > 0);
 });
 
 test('batch budget is 64MiB and files beyond the first batch are eventually read', async context => {

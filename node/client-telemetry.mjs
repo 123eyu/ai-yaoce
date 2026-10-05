@@ -1,5 +1,6 @@
 import { readdir, lstat, open, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { matchRule, SOURCES } from './pricing-rules.mjs';
 import { sourceDefinition } from './source-registry.mjs';
 
@@ -9,13 +10,6 @@ const text = (value, fallback = '') => typeof value === 'string' ? value : fallb
 const number = value => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e15)) : 0;
 const total = tokens => tokens.input + tokens.cached + tokens.written + tokens.output;
 const emptyTokens = () => ({ input: 0, cached: 0, written: 0, output: 0 });
-async function sampleBoundary(handle, offset) {
-  const length = Math.min(128, offset);
-  const head = Buffer.alloc(length), tail = Buffer.alloc(length);
-  await handle.read(head, 0, length, 0);
-  await handle.read(tail, 0, length, offset - length);
-  return Buffer.concat([head, tail]);
-}
 export function codexTokens(value) {
   const input = number(value.input_tokens);
   const cached = Math.min(input, number(value.cached_input_tokens));
@@ -143,7 +137,7 @@ export class ClientTelemetryReader {
     this.files = new Map();
     this.readBuffer = Buffer.alloc(262144);
     this.cursor = 0;
-    this.lastScan = { bytes: 0, files: 0 };
+    this.lastScan = { bytes: 0, validationBytes: 0, files: 0 };
   }
   async roots() {
     const roots = [];
@@ -183,11 +177,11 @@ export class ClientTelemetryReader {
     candidates.sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs || left.path.localeCompare(right.path));
     const active = new Set(candidates.map(candidate => candidate.path));
     for (const path of this.files.keys()) if (!active.has(path)) this.files.delete(path);
-    this.lastScan = { bytes: 0, files: 0 };
+    this.lastScan = { bytes: 0, validationBytes: 0, files: 0 };
     const ordered = candidates.slice(this.cursor).concat(candidates.slice(0, this.cursor));
     let processed = 0;
     for (const candidate of ordered) {
-      if (processed >= SCAN_LIMITS.files || this.lastScan.bytes >= SCAN_LIMITS.bytes) break;
+      if (processed >= SCAN_LIMITS.files || this.lastScan.bytes + this.lastScan.validationBytes >= SCAN_LIMITS.bytes) break;
       processed++; this.lastScan.files++;
       await this.readCandidate(candidate, horizon);
     }
@@ -198,23 +192,38 @@ export class ClientTelemetryReader {
   async readCandidate({ path, source, stat }, horizon) {
     let state = this.files.get(path);
     const reset = !state || stat.ino !== state.ino || stat.size < state.offset || ((stat.mtimeMs !== state.modified || stat.ctimeMs !== state.changed) && stat.size <= state.size);
-    if (reset) state = { offset: 0, parser: new UsageLogParser(source, path), pending: Buffer.alloc(0), dropping: false, committed: null };
-    state.ino = stat.ino; state.modified = stat.mtimeMs; state.changed = stat.ctimeMs; state.size = stat.size;
+    if (reset) state = { offset: 0, parser: new UsageLogParser(source, path), pending: Buffer.alloc(0), dropping: false, committed: null, hash: createHash('sha256') };
     this.files.set(path, state);
     let handle;
     try {
       if (state.offset < stat.size) handle = await open(path, 'r');
-      if (handle && state.signature && !(await sampleBoundary(handle, state.offset)).equals(state.signature)) {
-        state.offset = 0; state.parser = new UsageLogParser(source, path);
-        state.pending = Buffer.alloc(0); state.dropping = false; state.committed = null;
+      let budget = Math.min(SCAN_LIMITS.fileBytes, SCAN_LIMITS.bytes - this.lastScan.bytes - this.lastScan.validationBytes);
+      if (handle && state.offset > 0 && (state.validation || stat.size !== state.size || stat.mtimeMs !== state.modified || stat.ctimeMs !== state.changed)) {
+        const stamp = `${stat.ino}/${stat.size}/${stat.mtimeMs}/${stat.ctimeMs}`;
+        if (state.validation?.stamp !== stamp) state.validation = { stamp, offset: 0, hash: createHash('sha256') };
+        const validation = state.validation;
+        while (budget > 0 && validation.offset < state.offset) {
+          const { bytesRead } = await handle.read(this.readBuffer, 0, Math.min(this.readBuffer.length, budget, state.offset - validation.offset), validation.offset);
+          if (!bytesRead) break;
+          validation.hash.update(this.readBuffer.subarray(0, bytesRead));
+          validation.offset += bytesRead; budget -= bytesRead; this.lastScan.validationBytes += bytesRead;
+        }
+        if (validation.offset < state.offset) { this.issues[source].add('文件变动校验尚未完成，保留上次统计'); return; }
+        const unchanged = validation.hash.digest('hex') === state.hash.copy().digest('hex');
+        state.validation = null;
+        if (!unchanged) {
+          state.offset = 0; state.parser = new UsageLogParser(source, path);
+          state.pending = Buffer.alloc(0); state.dropping = false; state.committed = null; state.hash = createHash('sha256');
+        }
       }
-      let budget = Math.min(SCAN_LIMITS.fileBytes, SCAN_LIMITS.bytes - this.lastScan.bytes);
+      state.ino = stat.ino; state.modified = stat.mtimeMs; state.changed = stat.ctimeMs; state.size = stat.size;
       while (budget > 0 && state.offset < stat.size) {
         const buffer = this.readBuffer;
         const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, budget, stat.size - state.offset), state.offset);
         if (!bytesRead) break;
         budget -= bytesRead; this.lastScan.bytes += bytesRead; state.offset += bytesRead;
         let chunk = buffer.subarray(0, bytesRead);
+        state.hash.update(chunk);
         if (state.dropping) {
           const newline = chunk.indexOf(10);
           if (newline < 0) continue;
@@ -231,7 +240,6 @@ export class ClientTelemetryReader {
         if (state.pending.length > SCAN_LIMITS.lineBytes) { state.pending = Buffer.alloc(0); state.dropping = true; this.issues[source].add('已跳过超大日志行'); }
       }
       state.complete = state.offset >= stat.size;
-      if (handle) state.signature = await sampleBoundary(handle, state.offset);
       if (state.complete) state.committed = null;
       else this.issues[source].add('日志尚未读完，下批从游标继续');
       state.parser.prune(horizon); state.committed?.prune(horizon);
