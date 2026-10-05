@@ -47,6 +47,15 @@ FunctionEnd
 
 Section "AI 遥测"
   SetShellVarContext current
+  IfFileExists "$INSTDIR\ai-yaoce.exe" conflict
+  IfFileExists "$INSTDIR\LICENSE" conflict
+  IfFileExists "$INSTDIR\uninstall.exe" conflict
+  Goto safe_destination
+  conflict:
+    MessageBox MB_OK|MB_ICONSTOP "目标目录存在同名文件，安装已停止以保护原文件。请先卸载已有版本，或选择空目录。" /SD IDOK
+    SetErrorLevel 4
+    Abort
+  safe_destination:
   IfFileExists "$INSTDIR\AI 遥测.exe" 0 +4
     MessageBox MB_OK|MB_ICONSTOP "此目录包含旧 Electron 版，请先通过 Windows 应用设置卸载旧版，或选择其他安装目录。" /SD IDOK
     SetErrorLevel 3

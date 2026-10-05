@@ -174,7 +174,7 @@ namespace AiYaoce
             official.Text = snapshot.Official; official.Visible = snapshot.Official.Length > 0;
             foreach (string item in snapshot.Audit) audit.Items.Add(item);
             if (snapshot.Unpriced > 0) audit.Items.Add(snapshot.Unpriced + " 条未计价；参考费用并非账单");
-            audit.Items.Add("本月 token：" + Count(snapshot.MonthTokens));
+            audit.Items.Add("本月 token：" + (snapshot.Files > 0 ? Count(snapshot.MonthTokens) : "—（无可用计量）"));
             status.Text = (settings.Paused ? "已暂停 / " : "") + snapshot.Status + "\r\n" + snapshot.Files + " 个日志文件 · 更新 " + snapshot.ScannedAt.ToLocalTime().ToString("HH:mm:ss");
         }
         public void ExitApp() { closing = true; timer.Stop(); stop.Cancel(); tray.Visible = false; Close(); }

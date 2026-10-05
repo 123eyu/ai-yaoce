@@ -38,6 +38,17 @@ Invoke-App $exe '--smoke' $homeSmall "$root/packaged"
 $destination = Join-Path $env:LOCALAPPDATA 'Programs/ai-yaoce'
 if (Test-Path $destination) { throw 'Refusing to replace an existing installation during verification' }
 $installer = (Resolve-Path 'release/windows-lite/ai-yaoce-2.0.0-windows-x64-setup.exe').Path
+foreach ($reserved in @('LICENSE', 'ai-yaoce.exe', 'uninstall.exe')) {
+  $conflict = Join-Path $root "existing-$reserved"
+  New-Item -ItemType Directory -Force $conflict | Out-Null
+  $existing = Join-Path $conflict $reserved
+  Write-Utf8 $existing 'user-owned-before-install'
+  $process = Start-Process $installer -ArgumentList "/S /D=$conflict" -PassThru -Wait
+  if ($process.ExitCode -ne 4) { throw "Existing-file protection failed: $reserved" }
+  if ([IO.File]::ReadAllText($existing) -ne 'user-owned-before-install') { throw 'Installer changed user-owned file' }
+  if ((Get-ChildItem $conflict -Force | Measure-Object).Count -ne 1) { throw 'Rejected installation wrote files' }
+  Remove-Item $existing; Remove-Item $conflict
+}
 $process = Start-Process $installer -ArgumentList '/S' -PassThru -Wait
 if ($process.ExitCode -ne 0) { throw 'Installation failed' }
 $installed = Join-Path $destination 'ai-yaoce.exe'
@@ -65,6 +76,6 @@ if (!(Test-Path "$homeSmall/app-settings/native-settings.json")) { throw 'Test s
 if (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'AI 遥测.lnk')) { throw 'Desktop shortcut not removed' }
 Remove-Item $sentinel
 if ((Get-ChildItem $destination -Force | Measure-Object).Count -eq 0) { Remove-Item $destination }
-@{passed=$true;installedBytes=$installBytes;defaultPath='LOCALAPPDATA/Programs/ai-yaoce';restarted=$true;uninstalled=$true;userContentPreserved=$true;scope='Windows CI, synthetic isolated local files; not physical-device validation'} | ConvertTo-Json | Set-Content "$root/installation.json"
+@{passed=$true;installedBytes=$installBytes;defaultPath='LOCALAPPDATA/Programs/ai-yaoce';restarted=$true;uninstalled=$true;userContentPreserved=$true;preexistingConflictsPreserved=3;scope='Windows CI, synthetic isolated local files; not physical-device validation'} | ConvertTo-Json | Set-Content "$root/installation.json"
 Get-Content "$root/performance/performance.json"
 Get-Content "$root/installation.json"
