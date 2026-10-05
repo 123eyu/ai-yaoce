@@ -3,7 +3,7 @@ const { resolve, join } = require('node:path');
 const root = resolve(__dirname, '..');
 const baseline = resolve(process.argv[2]);
 const mainPath = join(baseline, 'desktop/main.cjs');
-let main = readFileSync(mainPath, 'utf8');
+let main = readFileSync(mainPath, 'utf8').replace(/\r\n/g, '\n');
 const replacements = [
   ["const smoke = process.argv.includes('--smoke');", "const smoke = process.argv.includes('--smoke');\nconst performanceCheck = smoke && process.argv.includes('--smoke-performance');"],
   ["if (smoke && !smokeVisible) app.commandLine.appendSwitch('disable-gpu');", "if (smoke && !smokeVisible && !performanceCheck) app.commandLine.appendSwitch('disable-gpu');\nif (performanceCheck) require('./performance.cjs').prepare(join(fixtureDirectory, 'home'));"],
